@@ -402,7 +402,7 @@ UBaseType_t usPrioritySemaphoreWait(Semaphore_t *semaphore, Task_t *task)
     	{
 		printf("Task Priority of Current Task <%s> is: (%d). The System Ceiling (%d), caused by <%s>\n", task->TaskName, task->priority, systemCeiling, taskList[sysCeilByTask].TaskName);
 	}
-		
+	//If Task Priority is Higher than the system Ceiling. Allot the Resource	
     if (task->priority > systemCeiling)                                                  // Check task priority against system ceiling
     {   
 	   firstEntry = 0;
@@ -440,18 +440,19 @@ UBaseType_t usPrioritySemaphoreWait(Semaphore_t *semaphore, Task_t *task)
             printf("Failed to Lock Resource\n");
         }  
     }
+    //If task priority is less than or equal to the system ceiling, give resource if only the task has caused the priority 
     else if ((task->priority <=  systemCeiling) && (sysCeilByTask == task->taskIndex))
     {
         //printf("System Ceiling Caused by the Requesting Task\n");            
         if (xSemaphoreTake(semaphore->resourceLock, portMAX_DELAY) != pdFALSE)           // Lock the resource
         { 
             //printf("Resource Granted! Changing Priority if need be\n");
-		  task->gotSemaphore = 1U;
+		    task->gotSemaphore = 1U;
             semaphore->CurrTask = Tasks_Handle[task->taskIndex];                         //For Signalling
             newPriority = semaphore->priorityCeiling;
             if(task->priority < semaphore->priorityCeiling)
             {
-                task->priority = newPriority;
+                task->priority = newPriority;                                           //Change Priority
                 // Stack for Priority Tracking
                 if (task->stackTop < MAX_SEM_NESTING - 1) 
                 {
@@ -481,40 +482,29 @@ UBaseType_t usPrioritySemaphoreWait(Semaphore_t *semaphore, Task_t *task)
           }  
         else
         {   
-            // Update the task's priority in FreeRTOS
+            // Update the task's priority in FreeRTOS 
             vTaskPrioritySet(Tasks_Handle[task - taskList], semaphore->priorityCeiling); 
             printf("Task Already has Access to Requested Resource or Something Wrong!");
             return pdFALSE;
         }  
      }
+     //If task priority less then system ceiling and system ceiling is not casuesd by the task 
 	else if((task->priority == systemCeiling && sysCeilByTask != task->taskIndex))
 	{   
-        uint8_t semaphoreIndex = semaphore->index; // Determine the index of the semaphore
-        //notifyBlockedTasks[semaphoreIndex] = 1;
-     	// logic to wait for the semaphore to and then attempt to lock it
-		task->BlockedOnSemaphore = semaphore; // Set the blocked semaphore
-        //Logic to identify semaphore index
-        // uint8_t semaphoreIndex = -1;
-        // for (int i = 0; i < mainNUMBER_OF_SEMAPHORS; i++) {
-        //     if (blockedSemaphoreTracker[i].semaphore == semaphore) {
-        //         semaphoreIndex = i;
-        //         break;
-        //     }
-        // }
+        uint8_t semaphoreIndex = semaphore->index; // Index of the semaphore
 
-        // // Set the semaphore as blocked
-        // if (semaphoreIndex != -1) {
+		task->BlockedOnSemaphore = semaphore;      // Set the blocked semaphore
+
         blockedSemaphoreTracker[semaphoreIndex].isBlocked = 1;
         printf("Blocked Semaphore Tracker Updated. Index %d Blocked (0:A;1:B;2:C).\n", semaphoreIndex);
-        // }
 
 		//semaphore->WaitingTask = Tasks_Handle[task->taskIndex]; // Set the waiting task
    		printf("Task <%s> is waiting for semaphore <%s> since %d as the task is not causing the ceiling\n", task->TaskName, semaphore->resourceName,getCurrentTimeInSeconds());
 
-    	// Wait for a notification
+    	// Wait for a notification till and continue when the running task releases the semaphore that is causing the ceiling
     	xTaskNotifyWait(0x00, ULONG_MAX, NULL, portMAX_DELAY);
 
-    	semaphore->WaitingTask = NULL; // Clear the waiting task
+    	semaphore->WaitingTask = NULL;                   // Clear the waiting task
     	return usPrioritySemaphoreWait(semaphore, task); // Retry acquiring the semaphore
 
 	}
@@ -527,7 +517,7 @@ UBaseType_t usPrioritySemaphoreWait(Semaphore_t *semaphore, Task_t *task)
     boolean TaskCausedSysCeilFlg = pdFALSE;
     uint8_t dummyVarForDebug = 4U;
 
-    if (semaphore->resourceLock == NULL)                                                                // Check for valid semaphore
+    if (semaphore->resourceLock == NULL)                           // Check for valid semaphore
     {   
         printf("Valid Semaphore Does Not Exist\n");
         return pdFALSE;
@@ -538,14 +528,8 @@ UBaseType_t usPrioritySemaphoreWait(Semaphore_t *semaphore, Task_t *task)
                task->TaskName, semaphore->resourceName);
         return pdFAIL;
     }
-	//Waiting tasks
-    //@instant 9 since there is no task that has requested resource A this won't be executed.
-    // if(semaphore->WaitingTask != NULL) 
-	// {	
-	// 	printf("Previously Requested Semaphore NOW being freed!\n");
-    // 		xTaskNotify(semaphore->WaitingTask, 0x01, eNoAction);
-	// }
-    if (task->taskIndex == sysCeilByTask) 
+
+    if (task->taskIndex == sysCeilByTask)                         // Check for valid semaphore
     {
         TaskCausedSysCeilFlg = pdTRUE;
         dummyVarForDebug = sysCeilByTask;
