@@ -136,7 +136,6 @@ static uint8_t firstEntry = 1U;
 #define workersUSELESS_CYCLES_PER_TIME_UNIT	( 1000000UL)
 #define CUSTOM_STACK_SIZE (configMINIMAL_STACK_SIZE*4)
 
-//uint8_t notifyBlockedTasks[mainNUMBER_OF_SEMAPHORS] = {0};
 /*-----------------------------------------------------------*/
 //Function Prototypes
 UBaseType_t usPrioritySemaphoreWait(Semaphore_t *semaphore, Task_t *task); //Wrapper
